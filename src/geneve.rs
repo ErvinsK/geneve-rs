@@ -34,53 +34,50 @@ impl GenevePacket {
     }
 }
 
+// Enum for errors
+#[derive(Debug)]
+pub enum GeneveErr {
+    NotGeneve,
+}
+
 // Zero copy implementation of GenevePacket
 pub struct GenevePacketZC<'a> {
-    pub hdr: Option<Header>,
+    pub hdr: Header,
     pub offset: usize,
     pub payload: &'a [u8],
 }
 
 impl<'a> GenevePacketZC<'a> {
-    pub fn new(packet: &'a [u8]) -> GenevePacketZC {
+    pub fn new(packet: &'a [u8]) -> Option<GenevePacketZC> {
         if let Some((i, k)) = Header::unmarshal(packet) {
-            GenevePacketZC {
-                hdr: Some(i),
+            Some(GenevePacketZC {
+                hdr: i,
                 offset: k,
                 payload: packet,
-            }
+            })
         } else {
-            GenevePacketZC {
-                hdr: None,
-                offset: 0,
-                payload: packet,
-            }
+            None
         }
     }
     pub fn marshal(&self, buffer: &mut Vec<u8>) {
-        if let Some(i) = &self.hdr {
-            let mut hdr_buffer = vec![];
-            i.marshal(&mut hdr_buffer);
-            buffer.extend_from_slice(&hdr_buffer[..]);
-            buffer.extend_from_slice(&self.payload[self.offset..]);
-        }
+        let mut hdr_buffer = vec![];
+        self.hdr.marshal(&mut hdr_buffer);
+        buffer.extend_from_slice(&hdr_buffer[..]);
+        buffer.extend_from_slice(&self.payload[self.offset..]);
     }
 }
 
-impl<'a> From<&'a [u8]> for GenevePacketZC<'a> {
-    fn from(packet: &'a [u8]) -> Self {
+impl<'a> TryFrom<&'a [u8]> for GenevePacketZC<'a> {
+    type Error = GeneveErr;
+    fn try_from(packet: &'a [u8]) -> Result<Self, Self::Error> {
         if let Some((i, k)) = Header::unmarshal(packet) {
-            GenevePacketZC {
-                hdr: Some(i),
+            Ok(GenevePacketZC {
+                hdr: i,
                 offset: k,
                 payload: packet,
-            }
+            })
         } else {
-            GenevePacketZC {
-                hdr: None,
-                offset: 0,
-                payload: packet,
-            }
+            Err(Self::Error::NotGeneve)
         }
     }
 }
@@ -352,10 +349,9 @@ fn geneve_packet_zc_unmarshal() {
         ]),
         options_len: 16,
     };
-    let packet = GenevePacketZC::from(&encoded_payload[..]);
-    //let packet = GenevePacket::new(&encoded_payload);
-    if let Some(i) = packet.hdr {
-        assert_eq!(i, decoded_hdr);
+    match GenevePacketZC::try_from(&encoded_payload[..]) {
+        Ok(i) => assert_eq!(i.hdr, decoded_hdr),
+        Err(_) => panic!(),
     }
 }
 
@@ -365,8 +361,7 @@ fn geneve_packet_zc_marshal() {
         0x04, 0x00, 0x86, 0xdd, 0xaa, 0xaa, 0xee, 0x00, 0xff, 0xff, 0x0a, 0x01, 0x00, 0x01, 0x00,
         0x00, 0xff, 0xff, 0x0b, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
-    let packet = GenevePacketZC::new(&encoded_payload);
-    if packet.hdr.is_some() {
+    if let Some(packet) = GenevePacketZC::new(&encoded_payload) {
         let mut buffer = vec![];
         packet.marshal(&mut buffer);
         assert_eq!(buffer, encoded_payload);

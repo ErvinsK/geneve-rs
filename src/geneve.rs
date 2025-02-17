@@ -24,7 +24,7 @@ pub struct GenevePacket<'a> {
 }
 
 impl<'a> GenevePacket<'a> {
-    pub fn new(packet: &'a [u8]) -> Option<GenevePacket> {
+    pub fn new(packet: &[u8]) -> Option<GenevePacket> {
         if let Some((i, k)) = Header::unmarshal(packet) {
             Some(GenevePacket {
                 hdr: i,

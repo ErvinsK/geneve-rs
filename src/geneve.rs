@@ -24,7 +24,7 @@ pub struct GenevePacket<'a> {
 }
 
 impl<'a> GenevePacket<'a> {
-    pub fn new(packet: &[u8]) -> Option<GenevePacket> {
+    pub fn new(packet: &'a [u8]) -> Option<GenevePacket<'a>> {
         if let Some((i, k)) = Header::unmarshal(packet) {
             Some(GenevePacket {
                 hdr: i,
@@ -295,7 +295,7 @@ impl<'a> TunnelOption<'a> {
     /// Each option can be between 4 and 128 bytes in length.
     pub fn opt_len(&self) -> usize {
         let data_len = self.data_len();
-        let remainder_len = if data_len % 4 != 0 { 4 - (data_len % 4) } else { 0 };
+        let remainder_len = if !data_len.is_multiple_of(4) { 4 - (data_len % 4) } else { 0 };
 
         Self::MIN_OPT_SIZE + data_len + remainder_len
     }
